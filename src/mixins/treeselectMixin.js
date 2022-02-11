@@ -305,6 +305,14 @@ export default {
     },
 
     /**
+     * topped the exact matching result?
+     */
+    preferredExactMatch: {
+      type: Boolean,
+      default: true,
+    },
+
+    /**
      * Whether to enable flat mode or not. Non-flat mode (default) means:
      *   - Whenever a branch node gets checked, all its children will be checked too
      *   - Whenever a branch node has all children checked, the branch node itself will be checked too
@@ -1191,14 +1199,34 @@ export default {
         this.closeMenu()
       }
     },
-
+    // preferred exact match add by zm
+    toppedExactMatch(node) {
+      const parentNode = node.parentNode
+      const nodeIndex = parentNode.children.findIndex(child => child.id === node.id)
+      if (nodeIndex > 0) {
+        parentNode.children.splice(nodeIndex, 1)
+        parentNode.children.unshift(node)
+      }
+      if (parentNode.isRootNode) {
+        const parentNodeIndex = this.forest.normalizedOptions.findIndex(o => o.id === parentNode.id)
+        if (parentNodeIndex > 0) {
+          this.forest.normalizedOptions.splice(parentNodeIndex, 1)
+          this.forest.normalizedOptions.unshift(parentNode)
+        }
+      } else {
+        this.toppedExactMatch(node.parentNode)
+      }
+    },
     handleLocalSearch() {
       const { searchQuery } = this.trigger
-      const done = () => this.resetHighlightedOptionWhenNecessary(true)
+      const done = () => this.resetHighlightedOptionWhenNecessary(!this.preferredExactMatch)
 
       if (!searchQuery) {
         // Exit sync search mode.
         this.localSearch.active = false
+        if (this.preferredExactMatch) {
+          this.initialize()
+        }
         return done()
       }
 
@@ -1233,6 +1261,10 @@ export default {
           node.isMatched = this.matchKeys.some(matchKey =>
             match(!this.disableFuzzyMatching, lowerCasedSearchQuery, node.lowerCased[matchKey]),
           )
+          // preferred exact match add by zm
+          if (this.preferredExactMatch && node.isLeaf && lowerCasedSearchQuery === node.label.toLocaleLowerCase()) {
+            this.toppedExactMatch(node)
+          }
         }
 
         if (node.isMatched) {
@@ -1254,7 +1286,6 @@ export default {
           node.parentNode.hasMatchedDescendants = true
         }
       })
-
       done()
     },
 
